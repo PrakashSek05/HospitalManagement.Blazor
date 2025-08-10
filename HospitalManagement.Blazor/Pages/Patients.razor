@@ -176,10 +176,18 @@
                 Status = _edit.Status                
             };
 
-            var newId = await Api.CreateAsync(create);
-            if (newId is null)
+            int newId = await Api.CreateAsync(create);
+            if (newId ==0)
             {
+                Close();
                 Toasts.Error("Create failed");
+                return;
+            }
+            else
+            {
+                Close();
+                Reload();
+                Toasts.Success("Added successfully");
                 return;
             }
         }
@@ -199,12 +207,14 @@
             var ok = await Api.UpdateAsync(_edit.Id, update);
             if (ok)
             {
-                //Close();
-                Toasts.Success("Added successfully");
+                Close();
+                Reload();
+                Toasts.Success("Updated successfully");
                 return;
             }
             else
             {
+                Close();
                 Toasts.Error("Update failed");
                 return;
             }
@@ -212,6 +222,7 @@
 
         _showModal = false;
         await Reload();
+        Close();
         Toasts.Success("Saved successfully");
     }
 

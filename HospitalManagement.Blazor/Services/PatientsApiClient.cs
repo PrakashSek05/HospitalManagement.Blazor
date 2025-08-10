@@ -17,12 +17,15 @@ public class PatientsApiClient
     public async Task<PatientListItemDto?> GetByIdAsync(int id, CancellationToken ct = default)
         => await _http.GetFromJsonAsync<PatientListItemDto>($"api/patients/{id}", ct);
 
-    public async Task<PatientListItemDto?> CreateAsync(PatientCreateDto model, CancellationToken ct = default)
+    public async Task<int> CreateAsync(PatientCreateDto model, CancellationToken ct = default)
     {
         var resp = await _http.PostAsJsonAsync("api/patients", model, ct);
-        if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<PatientListItemDto>(cancellationToken: ct);
+        if (!resp.IsSuccessStatusCode) { return 0; } else
+        {
+            return 1;
+        }
     }
+
 
     public async Task<bool> UpdateAsync(int id, PatientUpdateDto model, CancellationToken ct = default)
     {

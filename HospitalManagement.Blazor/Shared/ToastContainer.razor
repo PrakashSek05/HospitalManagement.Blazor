@@ -1,77 +1,59 @@
 ﻿@using HospitalManagement.Blazor.Services
 @inject ToastService Toasts
 
-<div class="toast-stack">
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1080;">
     @foreach (var t in _toasts)
     {
-        var css = t.Level switch
-        {
-            ToastLevel.Success => "alert alert-success alert-dismissible fade show",
-            ToastLevel.Warning => "alert alert-warning alert-dismissible fade show",
-            ToastLevel.Error => "alert alert-danger alert-dismissible fade show",
-            _ => "alert alert-secondary alert-dismissible fade show"
-        };
-
-        <div class="@css" role="alert">
-            <strong>@t.Title</strong>
-            <div>@t.Message</div>
-            <button type="button" class="btn-close" aria-label="Close" @onclick="() => Dismiss(t.Id)"></button>
+        <div class="toast show mb-2 border rounded shadow-sm">
+            <div class="toast-header">
+                <strong class="me-auto">@t.Title</strong>
+                <small>@DateTime.Now.ToShortTimeString()</small>
+                <button type="button" class="btn-close ms-2 mb-1" @onclick="(() => Close(t))"></button>
+            </div>
+            <div class="toast-body">
+                @t.Message
+            </div>
         </div>
     }
 </div>
 
 @code {
-    private readonly List<ToastVm> _toasts = new();
+    private readonly List<ToastMessage> _toasts = new();
 
     protected override void OnInitialized()
-    {
+    {     
         Toasts.OnShow += HandleShow;
+    }
+
+    private void HandleShow(ToastMessage msg)
+    {        
+        InvokeAsync(async () =>
+        {
+            _toasts.Add(msg);
+            StateHasChanged();
+
+            
+            try
+            {
+                await Task.Delay(msg.TimeoutMs);
+                _toasts.Remove(msg);
+                StateHasChanged();
+            }
+            catch
+            {
+                
+            }
+        });
+    }
+
+    private void Close(ToastMessage msg)
+    {
+        _toasts.Remove(msg);
+        StateHasChanged();
     }
 
     public void Dispose()
     {
         Toasts.OnShow -= HandleShow;
-    }
-
-    private void HandleShow(ToastMessage msg)
-    {
-        var vm = new ToastVm
-        {
-            Id = Guid.NewGuid(),
-            Level = msg.Level,
-            Title = msg.Title,
-            Message = msg.Message,
-            TimeoutMs = msg.TimeoutMs
-        };
-
-        _toasts.Add(vm);
-        StateHasChanged();
-
-        _ = AutoHideAsync(vm.Id, vm.TimeoutMs);
-    }
-
-    private async Task AutoHideAsync(Guid id, int timeout)
-    {
-        await Task.Delay(timeout);
-        Dismiss(id);
-    }
-
-    private void Dismiss(Guid id)
-    {
-        var i = _toasts.FindIndex(t => t.Id == id);
-        if (i >= 0)
-        {
-            _toasts.RemoveAt(i);
-            StateHasChanged();
-        }
-    }
-
-    private sealed class ToastVm
-    {
-        public Guid Id { get; init; }
-        public ToastLevel Level { get; init; }
-        public string Title { get; init; } = "";
-        public string Message { get; init; } = "";
-        public int TimeoutMs { get; init; }
     }
 }
