@@ -1,0 +1,101 @@
+﻿@page "/"
+@using HospitalManagement.Blazor.DTO
+@using HospitalManagement.Blazor.Services
+@inject DashboardApiClient Api
+
+<div class="container py-3">
+    <div class="d-flex align-items-center">
+        <h4 class="mb-0">Dashboard</h4>
+        <div class="ms-auto">
+            <button class="btn btn-outline-primary" @onclick="Reload" disabled="@_loading">
+                @(_loading ? "Loading..." : "Refresh")
+            </button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="progress mt-3">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="alert alert-danger mt-3">@_error</div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3 mt-2">
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted">Active Appointments</div>
+                        <div class="h3 mb-0">@_data.ActiveAppointments</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted">Active Patients</div>
+                        <div class="h3 mb-0">@_data.ActivePatients</div>
+                        <small class="text-muted">/ @_data.TotalPatients total</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted">Pending Bills</div>
+                        <div class="h3 mb-0">@_data.PendingBills</div>
+                        <small class="text-muted">Completed: @_data.CompletedBills</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted">Doctors Available</div>
+                        <div class="h3 mb-0">@_data.AvailableDoctors</div>
+                        <small class="text-muted">/ @_data.TotalDoctors total</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private DashboardSummaryDto? _data;
+    private string? _error;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task Reload() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _error = null;
+            _loading = true;
+            _data = await Api.GetSummaryAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+}

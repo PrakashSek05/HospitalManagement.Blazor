@@ -1,0 +1,241 @@
+﻿@page "/patients"
+@using HospitalManagement.Blazor.DTO
+@using HospitalManagement.Blazor.Services
+@inject PatientsApiClient Api
+@inject IJSRuntime JS
+@inject ToastService Toasts
+
+<div class="d-flex mb-3">
+    <h3 class="mb-0">Patients</h3>
+    <div class="ms-auto">
+        <button class="btn btn-primary" @onclick="Create">Add Patient</button>
+    </div>
+</div>
+
+<PaginatedTable TItem="PatientListItemDto"
+                Items="_items"
+                SearchPlaceholder="Name / MRN / Phone Number"
+                SearchPredicate="SearchPatients"
+                Loading="_loading">
+    <HeaderTemplate>
+        <tr>
+            <th>MRN</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Last Appointment</th>
+            <th class="text-end">Actions</th>
+        </tr>
+    </HeaderTemplate>
+    <RowTemplate Context="p">
+        <tr>
+            <td>@p.MRN</td>
+            <td>@p.FullName</td>
+            <td>@p.Phone</td>
+            <td>@(p.LastAppointmentDate?.ToString("dd-MMM-yyyy") ?? "-")</td>            
+            <td class="text-end">
+                <button class="btn btn-sm btn-outline-secondary me-2" @onclick="() => Edit(p.PatientId)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(p.PatientId)">Delete</button>
+            </td>
+        </tr>
+    </RowTemplate>
+</PaginatedTable>
+
+@if (_showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_edit.Id == 0 ? "Add Patient" : "Edit Patient")</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="Close"></button>
+                </div>
+
+                <EditForm Model="_edit" OnValidSubmit="Save">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="modal-body">
+                        <div class="mb-2">
+                            <label class="form-label">MRN</label>
+                            <InputText class="form-control" @bind-Value="_edit.Mrn" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Full Name</label>
+                            <InputText class="form-control" @bind-Value="_edit.FullName" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Phone</label>
+                            <InputText class="form-control" @bind-Value="_edit.Phone" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Date of Birth</label>
+                            <InputDate class="form-control" @bind-Value="_edit.Dob" TValue="DateOnly?" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Gender</label>
+                            <InputSelect class="form-select" @bind-Value="_edit.Gender">
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </InputSelect>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Address</label>
+                            <InputText class="form-control" @bind-Value="_edit.Address" />
+                        </div>
+                        <div class="form-check mb-2">
+                            <InputCheckbox class="form-check-input" @bind-Value="_edit.Status" />
+                            <label class="form-check-label">Active</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" type="button" @onclick="Close">Cancel</button>
+                        <button class="btn btn-primary" type="submit">Save</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // List
+    private List<PatientListItemDto> _items = new();
+    private bool _loading;
+
+    // Modal state + VM used by the form
+    private bool _showModal;
+    private PatientEditVm _edit = new();
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        _loading = true;
+        _items = await Api.GetAllAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private bool SearchPatients(PatientListItemDto item, string term) =>
+        (!string.IsNullOrEmpty(item.MRN) && item.MRN.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+        (!string.IsNullOrEmpty(item.FullName) && item.FullName.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+        (!string.IsNullOrEmpty(item.Phone) && item.Phone.Contains(term, StringComparison.OrdinalIgnoreCase));
+
+    private void Create()
+    {
+        _edit = new PatientEditVm
+        {
+            Id = 0,
+            Mrn = string.Empty,
+            FullName = string.Empty,
+            Phone = string.Empty,
+            Dob = null,
+            Address = string.Empty,
+            Gender = string.Empty,
+            Status = true
+        };
+        _showModal = true;
+    }
+
+    private async Task Edit(int id)
+    {
+        var dto = await Api.GetByIdAsync(id); // GET /api/patients/{id} -> PatientDetailDto
+        if (dto is null)
+        {
+            Toasts.Warning("Patient not found");
+            return;
+        }
+
+        _edit = new PatientEditVm
+        {
+            Id = dto.PatientId,
+            Mrn = dto.MRN,
+            FullName = dto.FullName,
+            Dob = dto.Dob,      // DateOnly?
+            Gender = dto.Gender,
+            Phone = dto.Phone,
+            Address = dto.Address,
+            Status = dto.Status
+        };
+
+        _showModal = true;
+    }
+
+    private async Task Save()
+    {
+        if (_edit.Id == 0)
+        {
+            var create = new PatientCreateDto
+            {
+                Mrn = _edit.Mrn,
+                FullName = _edit.FullName,
+                Dob = _edit.Dob,
+                Gender = _edit.Gender,
+                Phone = _edit.Phone,
+                Address = _edit.Address,
+                Status = _edit.Status                
+            };
+
+            var newId = await Api.CreateAsync(create);
+            if (newId is null)
+            {
+                Toasts.Error("Create failed");
+                return;
+            }
+        }
+        else
+        {
+            // Update
+            var update = new PatientUpdateDto
+            {
+                FullName = _edit.FullName,
+                Dob =_edit.Dob,
+                Gender = _edit.Gender,
+                Phone = _edit.Phone,
+                Address = _edit.Address,
+                Status = _edit.Status
+            };
+
+            var ok = await Api.UpdateAsync(_edit.Id, update);
+            if (ok)
+            {
+                //Close();
+                Toasts.Success("Added successfully");
+                return;
+            }
+            else
+            {
+                Toasts.Error("Update failed");
+                return;
+            }
+        }
+
+        _showModal = false;
+        await Reload();
+        Toasts.Success("Saved successfully");
+    }
+
+    private async Task Delete(int id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Delete this patient?"))
+        {
+            var ok = await Api.DeleteAsync(id);
+            if (!ok) { await JS.InvokeVoidAsync("alert", "Delete failed"); return; }
+            await Reload();
+        }
+    }
+
+    private void Close() => _showModal = false;
+    
+    public sealed class PatientEditVm
+    {
+        public int Id { get; set; }
+        public string Mrn { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public DateOnly? Dob { get; set; }
+        public string? Gender { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public bool Status { get; set; }
+    }
+}

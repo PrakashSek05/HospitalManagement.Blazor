@@ -1,0 +1,316 @@
+﻿@page "/appointments"
+@using System.Net.Http.Json
+@using HospitalManagement.Blazor.DTO
+@using HospitalManagement.UI.Models
+@inject HospitalManagement.Blazor.Services.AppointmentsApiClient Api
+@inject HospitalManagement.Blazor.Services.CommonApiClient Common
+
+<h4 class="mt-3">Appointments</h4>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-12 col-md-4">
+                <label class="form-label">Patient</label>
+                <InputSelect @bind-Value="filterPatientId" class="form-select">
+                    <option value="">All</option>
+                    @foreach (var p in patientOptions)
+                    {
+                        <option value="@p.Id">@p.Name (@p.Id)</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label">Doctor</label>
+                <InputSelect @bind-Value="filterDoctorId" class="form-select">
+                    <option value="">All</option>
+                    @foreach (var d in doctorOptions)
+                    {
+                        <option value="@d.Id">@d.Name (@d.Id)</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-12 col-md-2 form-check mt-4" style="display:none">
+                <input class="form-check-input" type="checkbox" id="onlyOpen" @bind="filterOnlyOpen" />
+                <label class="form-check-label" for="onlyOpen">Only open</label>
+            </div>
+            <div class="col-12 col-md-2 mt-2 mt-md-0">
+                <button class="btn btn-primary me-2" @onclick="Load">Search</button>
+                <button class="btn btn-secondary" @onclick="ResetFilters">Reset</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <div>
+        @if (isLoading)
+        {
+            <span class="text-muted">Loading...</span>
+        }
+        else if (error is not null)
+        {
+            <span class="text-danger">@error</span>
+        }
+    </div>
+    <button class="btn btn-success" @onclick="NewAppointment">Add Appointment</button>
+</div>
+
+<div class="table-responsive mt-3">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>#</th>
+                <th>Patient</th>
+                <th>Doctor</th>
+                <th>Visit</th>
+                <th>Status</th>
+                <th>Reason</th>
+                <th>Last Visit</th>
+                <th>Last Doctor</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (items is not null && items.Count > 0)
+            {
+                @foreach (var a in items)
+                {
+                    <tr>
+                        <td>@a.AppointmentId</td>
+                        <td>@a.PatientName (@a.PatientId)</td>
+                        <td>@a.DoctorName (@a.DoctorId)</td>
+                        <td>@(a.VisitDateTime?.ToString("yyyy-MM-dd HH:mm"))</td>
+                        <td>@a.Status</td>
+                        <td>@a.Reason</td>
+                        <td>@(a.LastVisitDateTime?.ToString("yyyy-MM-dd HH:mm"))</td>
+                        <td>@a.LastDoctorName</td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-primary btn-sm me-2" disabled="@(!(a.IsEdit ?? false))"
+                                    title="Edit" @onclick="() => Edit(a.AppointmentId)">
+                                Edit
+                            </button>
+                        </td>
+                    </tr>
+                }
+            }
+            else if (!isLoading)
+            {
+                <tr><td colspan="9" class="text-center text-muted">No data</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (showEditor)
+{
+    <div class="modal fade show" style="display:block; background:rgba(0,0,0,.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@((editModel.AppointmentId == 0) ? "Add Appointment" : $"Edit #{editModel.AppointmentId}")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditor"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="editModel" OnValidSubmit="Save">
+                        <DataAnnotationsValidator />
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Patient</label>
+                                <InputSelect @bind-Value="editModel.PatientId" class="form-select">
+                                    <option value="0">-- Select Patient --</option>
+                                    @foreach (var p in patientOptions)
+                                    {
+                                        <option value="@p.Id">@p.Name (@p.Id)</option>
+                                    }
+                                </InputSelect>
+                                <ValidationMessage For="@(() => editModel.PatientId)" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Doctor</label>
+                                <InputSelect @bind-Value="editModel.DoctorId" class="form-select">
+                                    <option value="0">-- Select Doctor --</option>
+                                    @foreach (var d in doctorOptions)
+                                    {
+                                        <option value="@d.Id">@d.Name (@d.Id)</option>
+                                    }
+                                </InputSelect>
+                                <ValidationMessage For="@(() => editModel.DoctorId)" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Visit Date</label>
+                                <InputDate @bind-Value="editVisitDate" class="form-control" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Status</label>
+                                <InputSelect @bind-Value="editModel.Status" class="form-select">
+                                    <option value="Scheduled">Scheduled</option>
+                                    <option value="Complete">Complete</option>
+                                    <option value="Cancel">Cancel</option>
+                                </InputSelect>
+                                <ValidationMessage For="@(() => editModel.Status)" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Reason</label>
+                                <InputTextArea @bind-Value="editModel.Reason" class="form-control" rows="3" />
+                            </div>
+                        </div>
+                        <ValidationSummary class="text-danger mt-2" />
+                    </EditForm>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseEditor">Cancel</button>
+                    <button class="btn btn-primary" @onclick="Save" disabled="@(!CanSave())">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // --- lookups
+    private List<LookupItemDto> patientOptions = new();
+    private List<LookupItemDto> doctorOptions = new();
+
+    // --- state
+    private List<AppointmentMasterVm> items = new();
+    private bool isLoading;
+    private string? error;
+
+    // --- filters (nullable for "All")
+    private int? filterPatientId;
+    private int? filterDoctorId;
+    private bool filterOnlyOpen = false;
+
+    // --- editor
+    private bool showEditor = false;
+    private AppointmentEditVm editModel = new();
+    private DateTime editVisitDate = DateTime.Today;
+    private TimeSpan editVisitTime = DateTime.Now.TimeOfDay;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookups();
+        await Load();
+    }
+
+    private async Task LoadLookups()
+    {
+        try
+        {
+            var patientsTask = Common.GetPatientsAsync();
+            var doctorsTask = Common.GetDoctorsAsync();
+
+            await Task.WhenAll(patientsTask, doctorsTask);
+
+            patientOptions = patientsTask.Result;
+            doctorOptions = doctorsTask.Result;
+        }
+        catch (Exception ex)
+        {
+            error = "Failed to load dropdowns: " + ex.Message;
+        }
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            isLoading = true;
+            error = null;
+
+            if (filterPatientId.HasValue || filterDoctorId.HasValue || filterOnlyOpen)
+                items = await Api.FilterAsync(filterPatientId, filterDoctorId, filterOnlyOpen);
+            else
+                items = await Api.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetFilters()
+    {
+        filterPatientId = null;
+        filterDoctorId = null;
+        filterOnlyOpen = false;
+        _ = Load();
+    }
+
+    private void NewAppointment()
+    {
+        editModel = new AppointmentEditVm
+        {
+            PatientId = 0,
+            DoctorId = 0,
+            VisitDateTime = DateTime.Now
+        };
+        editVisitDate = DateTime.Today;
+        editVisitTime = new TimeSpan(DateTime.Now.Hour, DateTime.Now.Minute, 0);
+        showEditor = true;
+    }
+
+    private async Task Edit(int id)
+    {
+        try
+        {
+            var dto = await Api.GetAsync(id);
+            if (dto is null) return;
+
+            editModel = new AppointmentEditVm
+            {
+                AppointmentId = dto.AppointmentId,
+                PatientId = dto.PatientId,
+                DoctorId = dto.DoctorId,
+                VisitDateTime = dto.VisitDateTime ?? DateTime.Now,
+                Status = dto.Status,
+                Reason = dto.Reason
+            };
+            editVisitDate = editModel.VisitDateTime.Date;
+            editVisitTime = editModel.VisitDateTime.TimeOfDay;
+
+            showEditor = true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private void CloseEditor() => showEditor = false;
+
+    private bool CanSave() => editModel.PatientId > 0 && editModel.DoctorId > 0;
+
+    private async Task Save()
+    {
+        try
+        {
+            if (!CanSave()) return;
+
+            editModel.VisitDateTime = editVisitDate.Date + editVisitTime;
+
+            if (editModel.AppointmentId == 0)
+            {
+                await Api.CreateAsync(editModel);
+            }
+            else
+            {
+                await Api.UpdateAsync(editModel.AppointmentId, editModel);
+            }
+
+            showEditor = false;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+}

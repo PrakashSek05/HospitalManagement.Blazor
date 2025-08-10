@@ -1,0 +1,11 @@
+﻿.toast-stack {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1080;
+    width: min(360px, 90vw);
+}
+
+    .toast-stack .alert {
+        margin-bottom: .5rem;
+    }
